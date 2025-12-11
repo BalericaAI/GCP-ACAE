@@ -1,0 +1,11 @@
+# .github/workflows/gcp-terraform.yml
+
+terraform fmt -check -recursive
+
+for d in lab*; do
+  cd "$d"
+  terraform init -input=false
+  terraform validate
+  terraform plan -input=false -out=tfplan
+  cd ..
+done
