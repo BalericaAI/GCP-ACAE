@@ -1,0 +1,342 @@
+GCP Advanced Cloud Architect & AI Engineer (GCP-ACAE)
+
+1. Domain A – Org Design, Projects, Networking & Security (15%)
+
+Goal: Beyond PCA “VPC + IAM basics” → full Org, multi-project, prod-ready setup.
+
+Key skills
+
+Multi-project layout: org → folders → projects (prod, staging, shared svcs)
+
+Hierarchical firewall policies, Org Policies (restrict external IPs, CMEK, region constraints)
+
+VPC-SC for data exfil protection (esp. with Vertex + BigQuery)
+
+Hybrid: Cloud VPN / Interconnect to on-prem / another cloud
+
+Identity: workload identity (for GKE), service accounts hygiene
+
+Sample lab
+
+Lab A1: “Three-Tier Org Setup with Restricted AI Access”
+
+Build with Terraform: org-level folder tree, 3 projects (shared-services, app-prod, app-stage)
+
+Configure:
+
+Central VPC in shared-services, VPC peering or Shared VPC
+
+Org policies: disallow external IPs except on bastion, require CMEK on certain services
+
+VPC-SC perimeter that includes Vertex AI + BigQuery
+
+Deliverables:
+
+Terraform code + README
+
+Diagram + explanation of why this meets “paranoid enterprise” standards
+
+GitHub Actions piece:
+
+Action that runs terraform fmt, terraform validate, terraform plan on PR
+
+Optional: requires security review label before allowing apply
+
+2. Domain B – Advanced Terraform & IaC Strategy (15%)
+
+Goal: Not “I can write main.tf” but IaC architecture: modules, environments, DRY, policy.
+
+Key skills
+
+Terraform modules for:
+
+GKE cluster
+
+Aurora-equivalent (Cloud SQL / AlloyDB)
+
+Vertex AI environment (buckets, service accounts, keys)
+
+Env separation: dev/stage/prod with workspaces or directory layout
+
+Remote state (GCS backend) + state locking
+
+Policy-as-code: OPA/Conftest or Terraform Cloud Policy Sets
+
+Sample lab
+
+Lab B1: “Platform Module Library”
+
+Build 3 reusable Terraform modules:
+
+gke_cluster (with Workload Identity, nodepools, autoscaling)
+
+serverless_api (Cloud Run + Cloud Endpoints / API Gateway)
+
+vertex_ai_workspace (buckets, SA, KMS, BQ dataset)
+
+Use them to stand up dev + prod with different settings.
+
+GitHub Actions piece:
+
+Workflow that:
+
+Runs tflint / checkov on modules
+
+Uses matrix jobs for dev and prod plans
+
+Optional: comment Terraform plan summary on PR
+
+3. Domain C – Kubernetes & GKE (Heavy) (25%)
+
+Goal: Turn PCA’s “GKE is nice” into “I can run a real production cluster or two.”
+
+Key skills
+
+GKE Standard vs Autopilot: when to use which
+
+Private clusters, control plane authorized networks
+
+Workload Identity + least-privilege service accounts
+
+Ingress: HTTP(S) Load Balancing, Managed Certs, Cloud Armor
+
+NetworkPolicy, PodSecurity (or successors), multi-tenant isolation
+
+Autoscaling: HPA, VPA; basic KEDA concept using Pub/Sub or SQS-like workloads
+
+CI/CD into GKE from GitHub Actions
+
+Sample labs
+
+Lab C1 – “Secure Multi-Tenant GKE Cluster”
+
+Create:
+
+1 GKE Standard cluster via Terraform
+
+3 namespaces: team-a, team-b, shared
+
+Implement:
+
+NetworkPolicy isolating team-a and team-b
+
+Pod security settings so only shared can run privileged pods
+
+Ingress with HTTP(S) Load Balancer + managed SSL
+
+Lab C2 – “GitHub Actions → GKE Blue/Green Deploy”
+
+Microservice app (simple Node/Go/Python) built into container
+
+CI: build + test + push to Artifact Registry
+
+CD:
+
+Deploy v1 to blue namespace, v2 to green
+
+Use traffic splitting via Ingress (e.g., separate host/path or weight simulation)
+
+Add rollback job triggered manually if health check fails.
+
+
+name: app-ci-cd
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build & test
+        run: |
+          docker build -t $IMAGE .
+          # run unit tests here
+
+  deploy-gke:
+    needs: build-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.DEPLOYER_SA }}
+      - uses: google-github-actions/get-gke-credentials@v2
+        with:
+          cluster_name: my-cluster
+          location: us-central1
+      - name: Apply manifests
+        run: kubectl apply -f k8s/
+
+
+4. Domain D – Observability, SRE, & Reliability (10%)
+
+Goal: Make them think in terms of SLIs, SLOs, error budgets, and incident response.
+
+Key skills
+
+Cloud Logging + Cloud Monitoring: metrics, alerts, dashboards
+
+SLOs with error budgets (availability and latency)
+
+Basic incident playbooks and postmortems
+
+GKE + Cloud Run + database observability
+
+Sample lab
+
+Lab D1 – “SLOs for GKE API”
+
+API deployed on GKE
+
+Define:
+
+Availability SLO (e.g., 99.5%)
+
+Latency SLO (95th percentile under X ms)
+
+Configure Monitoring + alerts which would wake up a hypothetical SRE
+
+GitHub Actions piece:
+
+Workflow that runs a synthetic test against staging before tagging a release and fails if latency > SLO
+
+5. Domain E – Data & Storage (Light but Real) (10%)
+
+Even though focus is infra/AI, they still need:
+
+Cloud Storage (lifecycle, immutability, bucket policies)
+
+BigQuery basics for data warehousing
+
+Cloud SQL vs AlloyDB decision points
+
+Backups, PITR, DR, cross-region
+
+Sample lab
+
+Lab E1 – “RAG Data Lake Prep”
+
+Create a bucket hierarchy for unstructured docs and embeddings
+
+Configure lifecycle: raw → processed → archive
+
+BigQuery dataset for logs/usage analytics
+
+6. Domain F – Vertex AI, Agentic AI & FMs (25%)
+
+Here’s your real differentiator over PCA.
+
+Key skills
+
+Vertex AI Model Garden: choosing / using foundation models
+
+Text, embedding, and vision models basics
+
+Vector Search (Vertex AI Vector Search or your own index on GCS/BQ)
+
+Building a RAG pipeline on GCP (Cloud Functions/Run + Vertex)
+
+Using Agents / “agentic AI” patterns: tools, memory, multi-step workflows
+
+Security: PII, DLP, prompt injection mitigation, grounding
+
+Sample labs
+
+Lab F1 – “RAG on GCP for Internal Docs”
+
+Terraform:
+
+GCS buckets
+
+BQ dataset
+
+Service accounts, KMS
+
+Pipeline:
+
+Ingest PDF → Cloud Run queue
+
+Extract text, chunk, embed via Vertex
+
+Store embeddings in Vector Search / BQ
+
+Chat API (Cloud Run):
+
+User query → find nearest chunks → call FM → grounded answer
+
+Lab F2 – “Agentic Support Bot with Tools”
+
+Design an agent with tools:
+
+Tool 1: query BigQuery for metrics
+
+Tool 2: query Vector store for docs
+
+Tool 3: write a summary to a GCS bucket
+
+Implement via:
+
+Cloud Run app orchestrating calls to Vertex + tools
+
+Log all tool calls + prompts for later eval
+
+Lab F3 – “Guardrails & Evaluation”
+
+Create a small test dataset of prompts (normal, adversarial)
+
+Implement:
+
+Safety filters (blocked topics)
+
+Output scoring (helpful / not helpful)
+
+Run offline eval and compute basic metrics (pass rate, hallucination flags).
+
+GitHub Actions ideas for F-domain
+
+Workflow that runs LLM eval tests on PR using a small test harness (even mocked).
+
+If > X% “bad responses”, fail the pipeline.
+
+Optionally, spin up ephemeral test env on Cloud Run for integration tests, then destroy with Terraform.
+
+7. Domain G – Governance, Cost, and Compliance (10%)
+
+Goal: Move beyond “turn off idle things” → real FinOps + guardrails.
+
+Key skills
+
+Budgets + alerts at project/folder level
+
+Labels/Tags for cost allocation
+
+CMEK & KMS for critical resources
+
+Policy controls around Vertex AI and GKE (regions, IPs, public exposure)
+
+Basic compliance mapping (ISO 27001, SOC2, HIPAA hints)
+
+Sample lab
+
+Lab G1 – “Governance Bundle”
+
+Terraform module:
+
+Budget + alert email
+
+Org policies for:
+
+disallow external IPs on dev
+
+restrict Vertex usage to certain regions
+
+Labeling convention enforced via policy (e.g., env, cost_center, owner)
+
+GitHub Actions piece:
+
+Conftest/OPA job that fails PR if resources in Terraform lack required labels or violate region policy.
